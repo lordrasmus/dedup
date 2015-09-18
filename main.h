@@ -27,8 +27,11 @@ class file_entry{
 		char* name;
 		
 		size_t length;
+		int fd = 0;
 		
 		
+		int  open_file( void );
+		void close_file( void );
 	
 		void print_path( void );
 		

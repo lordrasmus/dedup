@@ -230,25 +230,45 @@ void merge_files( void ){
 			
 			matches++;
 			
-			//printf("\nchecksum matches\n\n");
+			//printf("\nchecksum matches %d \n\n",t->count);
+			
+			/*
+			 * 	Anzahl der fds noch testen
+			 * 
+			 */
+			
+			
+			file_entry *fe;
+			list<file_entry *>::iterator it2;
+			
+			int src_fd = 0;
+			int off = 0;
 			
 			struct btrfs_ioctl_same_args *same = (struct btrfs_ioctl_same_args*)calloc(1, sizeof(struct btrfs_ioctl_same_args) + sizeof(struct btrfs_ioctl_same_extent_info) * t->count - 1);
 			struct btrfs_ioctl_same_extent_info *info;
-		
-			file_entry *fe;
-			list<file_entry *>::iterator it2;
+			
+			same->dest_count = t->count - 1;
 		
 			for (it2=t->files.begin(); it2!=t->files.end(); ++it2){
 				fe = *it2;
-				//fe->print_path();
+				
+				if ( src_fd == 0 ){
+					
+					src_fd = fe->open_file();
+					same->length = fe->length;
+					
+				}else{
+					
+					same->info[off].fd = fe->open_file();
+					
+					off++;
+					
+					reduction += fe->length;
+		
+				}
 				
 				total_matches++;
-				
-				reduction += fe->length;
 			}
-			
-			reduction -= fe->length;
-			
 			
 			
 			/*int ret = ioctl(src_fd, BTRFS_IOC_FILE_EXTENT_SAME, same);
@@ -258,6 +278,18 @@ void merge_files( void ){
 					strerror(ret));
 				return -ret;
 			}*/
+			
+			for (it2=t->files.begin(); it2!=t->files.end(); ++it2){
+				fe = *it2;
+				
+				fe->close_file();
+			}
+			
+			
+			free( same );
+			//close( src_fd );
+			
+			
 		}
 			
 	}
@@ -273,6 +305,40 @@ void merge_files( void ){
 	printf("\n");
 }
 
+int file_entry::open_file( void ){
+	int ret ;
+	
+	char full_path[2048];
+	
+	uint32_t used = this->parrent->add_path( full_path, sizeof( full_path ) );
+	
+	full_path[used] = '/';
+	strcpy( &full_path[used+1] , this->name );
+	
+	ret = open( full_path, O_RDONLY);
+	
+	if (ret < 0) {
+		printf("Error open : %m\n");
+		return 0;
+	}
+	
+	//printf("open : %s\n",full_path);
+	
+	this->fd = ret;
+	
+	return ret;
+}
+
+void file_entry::close_file( void ){
+	
+	if ( this->fd == 0 ) return;
+	
+	close( this->fd );
+	this->fd = 0;
+	
+	//printf("close : \n");
+	
+}
 
 void file_entry::update_hash( void ){
 	
@@ -311,15 +377,17 @@ void file_entry::update_hash( void ){
 	
 	this->length = st.st_size;
 	
-	if ( (S_ISREG(st.st_mode) ) && ( st.st_size > 0 ) )
+	if ( (S_ISREG(st.st_mode) ) && ( st.st_size > 0 ) && ( st.st_size < 128000000L ) )
     {
 	
 		unsigned char* mem = (unsigned char*)mmap(NULL, st.st_size , PROT_READ , MAP_PRIVATE, fd, 0);
 		
 		unsigned char *md = (unsigned char*)malloc( SHA512_DIGEST_LENGTH + MD5_DIGEST_LENGTH);
+		memset( md, 0 , SHA512_DIGEST_LENGTH + MD5_DIGEST_LENGTH );
 		
-		SHA512( mem ,st.st_size, md );
-		MD5( mem ,st.st_size, md + SHA512_DIGEST_LENGTH );
+		SHA1( mem ,st.st_size, md );
+		//SHA512( mem ,st.st_size, md );
+		//MD5( mem ,st.st_size, md + SHA512_DIGEST_LENGTH );
 		
 		add_hash( md, this );
 	
@@ -449,14 +517,14 @@ void listdir(const char *name, int level, dir_entry* root)
             root->sub_dirs.push_back( new_dir );
            
             
-            if ( level < 1 ){
+            /*if ( level < 1 ){
 				printf("Files : %d\n\n",files);
 			}
 				
             if ( level < 1 ){
-				
 				printf("scan : %s\n",path);
-			}
+				
+			}*/
             //printf("%*s[%s]\n", level*2, "", entry->d_name);
             listdir(path, level + 1, new_dir );
         }
@@ -489,6 +557,8 @@ void scan_dir( dir_entry* dir, char* path ){
 	dir->parrent = 0;
 	dir->name = path;
 	
+	printf("scan : %s\n",path);
+	
 	listdir(path, 0, dir);
 }
 
@@ -504,8 +574,8 @@ int main(void)
 	//listdir("/mnt/entwicklung/build_tmp/", 0);
 	
 	dir_entry root_debian;
-	scan_dir( &root_debian, (char*)"/mnt/entwicklung/build_tmp/Debian8/crosstool-ng-build");
-	//scan_dir( &root_debian, (char*)"/mnt/entwicklung/build_tmp/Debian8");
+	//scan_dir( &root_debian, (char*)"/mnt/entwicklung/build_tmp/Debian8/crosstool-ng-build");
+	scan_dir( &root_debian, (char*)"/mnt/entwicklung/build_tmp/Debian8");
 	
 	
 	dir_entry root_fedora;
@@ -520,7 +590,7 @@ int main(void)
     
    
     
-    printf("Hashing ...\n");
+    printf("\nHashing ...\n");
 	root_debian.update_hashes();
     //root_fedora.update_hashes();
     
