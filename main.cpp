@@ -11,6 +11,10 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <sys/ioctl.h>
+
+
+#include <linux/btrfs.h>
 
 #include <iostream>
 
@@ -180,7 +184,7 @@ void add_hash( unsigned char* hash, file_entry* file_p ){
 	}
 }
 
-
+#if 0
 struct btrfs_ioctl_same_extent_info {
 	int64_t fd;			/* in - destination file */
 	uint64_t logical_offset;	/* in - start of extent in destination */
@@ -205,6 +209,8 @@ struct btrfs_ioctl_same_args {
 	struct btrfs_ioctl_same_extent_info info[0];
 };
 
+#endif
+
 void print_size( char* text, size_t size){
 	
 	if ( size > ( 1024 * 1024 ) ){
@@ -214,6 +220,9 @@ void print_size( char* text, size_t size){
 		
 }
 
+#define BTRFS_IOCTL_MAGIC 0x94
+#define BTRFS_IOC_FILE_EXTENT_SAME _IOWR(BTRFS_IOCTL_MAGIC, 54, struct btrfs_ioctl_same_args)
+					 
 void merge_files( void ){
 	
 	uint32_t total_matches = 0;
@@ -231,6 +240,7 @@ void merge_files( void ){
 			matches++;
 			
 			//printf("\nchecksum matches %d \n\n",t->count);
+			printf("\nchecksum matches %d \n",t->count);
 			
 			/*
 			 * 	Anzahl der fds noch testen
@@ -260,6 +270,8 @@ void merge_files( void ){
 				}else{
 					
 					same->info[off].fd = fe->open_file();
+					same->info[off].bytes_deduped = 1;
+					same->info[off].status = 1;
 					
 					off++;
 					
@@ -268,16 +280,29 @@ void merge_files( void ){
 				}
 				
 				total_matches++;
+				
+				if ( t->count == 2 ){
+					fe->print_path();
+					printf("%d ( %d )\n",fe->fd,off);
+				}
 			}
 			
 			
-			/*int ret = ioctl(src_fd, BTRFS_IOC_FILE_EXTENT_SAME, same);
+			
+			
+			int ret = ioctl(src_fd, BTRFS_IOC_FILE_EXTENT_SAME, same);
 			if (ret < 0) {
-				ret = errno;
-				fprintf(stderr, "btrfs_same returned error: (%d) %s\n", ret,
-					strerror(ret));
-				return -ret;
-			}*/
+				fprintf(stderr, "btrfs_same returned error: (%d) %m\n", ret);
+				//return -ret;
+			}
+			
+			for ( int i = 0 ; i < off ; i++ ){
+				printf("dedeup : %d %d %m\n",
+					same->info[i].bytes_deduped,
+					same->info[i].status
+					);
+				
+			}
 			
 			for (it2=t->files.begin(); it2!=t->files.end(); ++it2){
 				fe = *it2;
@@ -315,7 +340,7 @@ int file_entry::open_file( void ){
 	full_path[used] = '/';
 	strcpy( &full_path[used+1] , this->name );
 	
-	ret = open( full_path, O_RDONLY);
+	ret = open( full_path, O_RDWR );
 	
 	if (ret < 0) {
 		printf("Error open : %m\n");
@@ -574,8 +599,8 @@ int main(void)
 	//listdir("/mnt/entwicklung/build_tmp/", 0);
 	
 	dir_entry root_debian;
-	//scan_dir( &root_debian, (char*)"/mnt/entwicklung/build_tmp/Debian8/crosstool-ng-build");
-	scan_dir( &root_debian, (char*)"/mnt/entwicklung/build_tmp/Debian8");
+	scan_dir( &root_debian, (char*)"/mnt/entwicklung/build_tmp/Debian8/crosstool-ng-build");
+	//scan_dir( &root_debian, (char*)"/mnt/entwicklung/build_tmp/Debian8");
 	
 	
 	dir_entry root_fedora;
