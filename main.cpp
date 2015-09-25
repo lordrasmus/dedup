@@ -30,9 +30,6 @@
 
 #include "file_based_memory.h"
 
-uint64_t files = 0;
-uint64_t files_hashed = 0;
-double files_hashed_proz = 0;
 
 
 
@@ -74,7 +71,7 @@ struct cmp_uchar_p {
     }
 };
 
-map< unsigned char* ,file_hash*, cmp_uchar_p > hashes_map;
+
 
 
 class Names{
@@ -140,7 +137,13 @@ class Names{
 };
 
 
+uint64_t files = 0;
+uint64_t files_hashed = 0;
+double files_hashed_proz = 0;
+
 Names *names;
+
+map< unsigned char* ,file_hash*, cmp_uchar_p > hashes_map;
 
 
 void file_entry::print_path( void ){
