@@ -24,7 +24,11 @@
 #include <openssl/md5.h>
 #include <openssl/sha.h>
 
+
+
 #include "main.h"
+
+#include "file_based_memory.h"
 
 uint64_t files = 0;
 uint64_t files_hashed = 0;
@@ -72,73 +76,72 @@ struct cmp_uchar_p {
 
 map< unsigned char* ,file_hash*, cmp_uchar_p > hashes_map;
 
-uint32_t cur_id = 0;
-map< char* ,uint32_t, cmp_char_p > names_map;
-map< char* ,uint32_t >::iterator names_map_it;
+
+class Names{
+	
+	private:
+
+		uint64_t cur_id = 0;
+		map< char* ,uint64_t, cmp_char_p > names_map;
+
+		FileMemory* name_memory;
+		
+	public:
+	
+		char* get_name( char* name ){
+			
+			char* name_t;
+			
+			map< char* ,uint64_t >::iterator names_map_it;
+			
+			names_map_it = names_map.find( name );
+			
+			if (names_map_it == names_map.end()) {
+				
+				name_t = name_memory->add_string( name );
+				
+				names_map.insert ( pair<char* ,uint32_t>( name_t ,cur_id++) );
+			}else{
+				name_t = names_map_it->first;
+			}
+			
+			return name_t;
+			
+		}
+		
+		
+		void load( void ){
+			printf("loading names  ...\n");
+	
+			name_memory= new FileMemory();
+			name_memory->open_mem( "/mnt/entwicklung_ext4/btrfs_dedeup_data/names" );
+			
+			while( name_memory->has_more_data() ){
+				
+				char *text = name_memory->get_string();
+				names_map.insert ( pair<char* ,uint64_t>( text ,cur_id++) );
+				
+			}
+			
+			printf("loading names finished\n");
+	
+		}
+		
+		void sync( void ){
+			
+			name_memory->sync( );
+		}
+		
+		void close( void ){
+			
+			name_memory->close_mem( );
+		}
+		
+};
 
 
-int   names_fd;
-off_t names_size = 4294967296L; // 4 GB
+Names *names;
 
-char* names_mem;
-off_t names_mem_offset = 0;
-
-
-
-
-
-void open_names_file(void ){
-	
-	char names_path[] = "/mnt/entwicklung_ext4/btrfs_dedeup_data/names";
-	
-	names_fd = open(names_path, O_RDWR | O_CREAT);
-	if ( names_fd < 0 ) {
-		printf("Error opening names files : %s\n   %m\n\n", names_path);
-		exit(1);
-	}
-
-	// create names as sparse file
-	
-	lseek( names_fd , names_size,  SEEK_SET );
-	lseek( names_fd , -3,  SEEK_CUR );
-	write( names_fd , "END", 3 );
-	lseek( names_fd , 0,  SEEK_SET );
-	
-	names_mem = (char*)mmap(NULL, names_size , PROT_READ | PROT_WRITE, MAP_SHARED, names_fd, 0);
-	if (names_mem == MAP_FAILED){
-		 printf("Error mmap : names file");
-		 exit(1);
-	}
-   
-}
-
-char* names_write( char* data ){
-	
-	uint16_t* size = (uint16_t*)names_mem;
-	
-	
-	
-	int l = strlen( data ) +1;
-	int l2 = l + ( l % 2 );	// auf 2 byte alignen
-	
-	//printf("add: %s  %d / %d\n",data, l , l2);
-	//printf("mem: %X \n",names_mem);
-	
-	*size = l2;
-	
-	names_mem += 2;
-	char * ret = names_mem;
-	
-	memcpy( names_mem, data, l + 1 );
-	
-	names_mem += l2;
-	
-	//sleep(1);
-	
-	return ret;
-	
-	
-}
 
 void file_entry::print_path( void ){
 	
@@ -211,7 +214,7 @@ struct btrfs_ioctl_same_args {
 
 #endif
 
-void print_size( char* text, size_t size){
+void print_size( const char* text, size_t size){
 	
 	if ( size > ( 1024 * 1024 ) ){
 		printf("%s%d MB\n",text,size / (1024 * 1024 ));
@@ -514,19 +517,7 @@ void listdir(const char *name, int level, dir_entry* root)
 		if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
 			continue;
             
-        char* name_t;
-             
-		//printf("search: %s \n",entry->d_name);
-		// prüfen ob schon in der map vorhanden
-		names_map_it = names_map.find( entry->d_name );
-		if (names_map_it == names_map.end()) {
-			
-			name_t = names_write( entry->d_name );
-			
-			names_map.insert ( pair<char* ,uint32_t>( name_t ,cur_id++) );
-		}else{
-			name_t = names_map_it->first;
-		}
+        char* name_t = names->get_name( entry->d_name );
 		
 		 
         if (entry->d_type == DT_DIR) {
@@ -573,7 +564,7 @@ void listdir(const char *name, int level, dir_entry* root)
     } while (entry = readdir(dir));
     closedir(dir);
     
-    msync( names_mem,  names_size,  MS_SYNC );
+    names->sync();
 }
 
 
@@ -589,11 +580,34 @@ void scan_dir( dir_entry* dir, char* path ){
 
 int main(void)
 {
+	/*uint16_t value;
+	
+	FileMemory* fm= new FileMemory();
+	fm->open_mem( "/mnt/entwicklung_ext4/btrfs_dedeup_data/dirs" );
+	
+	while( fm->has_more_data() ){
+		char*text = fm->get_string();
+		printf("string   : %s\n",text);
+		
+		value = fm->get_uint16_t();
+		printf("uint16_t : %d\n", value );
+	}
+	
+	fm->add_string( "test223" );
+	fm->add_uint16_t( value + 1 );
+	
+	return 0;*/
+	
+	names = new Names();
 	
 	printf("\nBtrfs Dedup Version : TRUNK\n\n");
 	
 	
-	open_names_file();
+	names->load();
+	
+	
+	
+	
 		
 	
 	//listdir("/mnt/entwicklung/build_tmp/", 0);
@@ -613,7 +627,7 @@ int main(void)
     //listdir("/mnt/entwicklung/build_tmp/Fedora22/", 0, &root_fedora);
     //listdir("/mnt/entwicklung/build_tmp/Fedora17/", 0);
     
-   
+	return 0;
     
     printf("\nHashing ...\n");
 	root_debian.update_hashes();
@@ -621,7 +635,7 @@ int main(void)
     
     printf("\nHashing finished\n");
     
-    merge_files();
+    //merge_files();
     
     //root_debian.print_dirs(0);
     //root_fedora.print_dirs(0);
@@ -632,7 +646,7 @@ int main(void)
 	cout << '\n';*/
     
     printf("Files : %d\n",files);
-    printf("Names : %d\n",cur_id);
+    
     
     
     printf("\n");
@@ -644,7 +658,7 @@ int main(void)
 		cout << names_map_it->first << " => " << names_map_it->second << '\n';
     */
     
-    close( names_fd );
+    names->close( );
     
    
     
