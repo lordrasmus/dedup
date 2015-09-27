@@ -8,7 +8,7 @@ using namespace std;
 
 extern Names *names;
 
-extern FileMemory* dir_memory;
+//extern FileMemory* dir_memory;
 		
 
 class dir_entry;
@@ -74,17 +74,17 @@ class dir_entry{
 
 			this->name = name_t;
 			
-			printf("new dir : %s ( %" PRIu64 " / %" PRIu64 " / %" PRIu64 " )\n", name_t, this->id, parrent_id , id_t);
-			print_path();printf("\n");
+			//printf("new dir : %s ( %" PRIu64 " / %" PRIu64 " / %" PRIu64 " )\n", name_t, this->id, parrent_id , id_t);
+			//print_path();printf("\n");
 			
-			dir_memory->add_uint16_t( this->id );
+			/*dir_memory->add_uint16_t( this->id );
 			dir_memory->add_uint16_t( id_t );
-			
 			dir_memory->add_uint64_t( parrent_id );
+			* */
 			
 			if ( parrent_p != 0 ){
 				//exit ( 1 );
-				sleep(1);
+				//sleep(1);
 			}
 		}
 		

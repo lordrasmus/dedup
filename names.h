@@ -36,7 +36,7 @@ class Names{
 				
 				name_t = name_memory->add_string( name );
 				
-				//printf("%d\n",cur_id);
+				printf("%d %s\n",cur_id, name_t);
 				uint64_t id_tmp = cur_id++;
 				if ( id != 0 )
 					*id = id_tmp;
@@ -66,7 +66,7 @@ class Names{
 				
 			}
 			
-			printf("loading names finished\n");
+			printf("loading names finished ( %d ) \n",cur_id);
 	
 		}
 		

@@ -44,7 +44,7 @@ Names *names;
 map< unsigned char* ,file_hash*, cmp_uchar_p > hashes_map;
 
 
-FileMemory* dir_memory;
+//FileMemory* dir_memory;
 
 void file_entry::print_path( void ){
 	
@@ -466,7 +466,7 @@ void listdir(const char *name, int level, dir_entry* root)
     } while (entry = readdir(dir));
     closedir(dir);
     
-    names->sync();
+    
 }
 
 
@@ -478,7 +478,7 @@ void scan_dir( dir_entry* dir, char* path ){
 	listdir(path, 0, dir);
 }
 
-int main(void)
+int main(int argc, char* argv[])
 {
 	/*uint16_t value;
 	
@@ -498,8 +498,8 @@ int main(void)
 	
 	return 0;*/
 	
-	dir_memory = new FileMemory();
-	dir_memory->open_mem( "/mnt/entwicklung_ext4/btrfs_dedeup_data/dirs" );
+	/*dir_memory = new FileMemory();
+	dir_memory->open_mem( "/mnt/entwicklung_ext4/btrfs_dedeup_data/dirs" );*/
 	
 	names = new Names();
 	
@@ -510,14 +510,16 @@ int main(void)
 	
 	
 	
-	
+	dir_entry* root_debian = new dir_entry( 0, argv[1] );
+	scan_dir( root_debian, (char*)argv[1]);
 		
+	names->sync();
 	
 	//listdir("/mnt/entwicklung/build_tmp/", 0);
 	
-	dir_entry* root_debian = new dir_entry( 0, "/usr/" );
+	//dir_entry* root_debian = new dir_entry( 0, "/mnt/btrfs//" );
 	//scan_dir( &root_debian, (char*)"/mnt/entwicklung/build_tmp/Debian8/crosstool-ng-build");
-	scan_dir( root_debian, (char*)"/usr/");
+	//scan_dir( root_debian, (char*)"/mnt/btrfs//");
 	//scan_dir( &root_debian, (char*)"/mnt/entwicklung/build_tmp/Debian8");
 	
 	
