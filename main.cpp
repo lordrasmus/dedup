@@ -35,9 +35,6 @@
 
 
 
-
-
-
 uint64_t files = 0;
 uint64_t files_hashed = 0;
 double files_hashed_proz = 0;
@@ -46,6 +43,8 @@ Names *names;
 
 map< unsigned char* ,file_hash*, cmp_uchar_p > hashes_map;
 
+
+FileMemory* dir_memory;
 
 void file_entry::print_path( void ){
 	
@@ -499,6 +498,9 @@ int main(void)
 	
 	return 0;*/
 	
+	dir_memory = new FileMemory();
+	dir_memory->open_mem( "/mnt/entwicklung_ext4/btrfs_dedeup_data/dirs" );
+	
 	names = new Names();
 	
 	printf("\nBtrfs Dedup Version : TRUNK\n\n");
@@ -513,9 +515,9 @@ int main(void)
 	
 	//listdir("/mnt/entwicklung/build_tmp/", 0);
 	
-	dir_entry* root_debian = new dir_entry( 0, "/var/" );
+	dir_entry* root_debian = new dir_entry( 0, "/usr/" );
 	//scan_dir( &root_debian, (char*)"/mnt/entwicklung/build_tmp/Debian8/crosstool-ng-build");
-	scan_dir( root_debian, (char*)"/var/");
+	scan_dir( root_debian, (char*)"/usr/");
 	//scan_dir( &root_debian, (char*)"/mnt/entwicklung/build_tmp/Debian8");
 	
 	

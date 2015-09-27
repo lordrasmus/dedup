@@ -71,7 +71,7 @@ bool FileMemory::has_more_data( void ){
 void FileMemory::add_uint16_t( uint16_t value ){
 	
 	uint16_t* size = (uint16_t*)this->mem_cur;
-	*size= 2;
+	*size= sizeof( uint16_t );
 	this->mem_cur +=2;
 	
 	uint16_t* data = (uint16_t*)this->mem_cur;
@@ -104,12 +104,12 @@ uint16_t FileMemory::get_uint16_t( void ){
 void FileMemory::add_uint32_t( uint32_t value ){
 	
 	uint16_t* size = (uint16_t*)this->mem_cur;
-	*size= 4;
+	*size= sizeof( uint32_t );
 	this->mem_cur +=2;
 	
 	uint32_t* data = (uint32_t*)this->mem_cur;
 	*data = value;
-	this->mem_cur +=2;
+	this->mem_cur += sizeof( uint32_t ) ;
 	
 	size = (uint16_t*)this->mem_cur;
 	*size = 0;
@@ -121,14 +121,47 @@ uint32_t FileMemory::get_uint32_t( void ){
 	uint32_t ret;
 
 	uint16_t* size = (uint16_t*)this->mem_cur;
-	if ( *size != 4 ){
+	if ( *size != sizeof( uint32_t ) ){
 		printf("next item size != 4 ( %d ) \n", *size);
 		exit(1);
 	}
 	this->mem_cur +=2;
 	
 	ret = *((uint32_t*)this->mem_cur);
-	this->mem_cur +=4;
+	this->mem_cur +=sizeof( uint32_t );
+	
+	return ret;
+}
+
+
+void FileMemory::add_uint64_t( uint64_t value ){
+	
+	uint16_t* size = (uint16_t*)this->mem_cur;
+	*size= sizeof( uint64_t );
+	this->mem_cur +=2;
+	
+	uint64_t* data = (uint64_t*)this->mem_cur;
+	*data = value;
+	this->mem_cur += sizeof( uint64_t ) ;
+	
+	size = (uint16_t*)this->mem_cur;
+	*size = 0;
+	
+}
+
+uint64_t FileMemory::get_uint64_t( void ){
+
+	uint64_t ret;
+
+	uint16_t* size = (uint16_t*)this->mem_cur;
+	if ( *size != sizeof( uint64_t ) ){
+		printf("next item size != 8 ( %d ) \n", *size);
+		exit(1);
+	}
+	this->mem_cur +=2;
+	
+	ret = *((uint64_t*)this->mem_cur);
+	this->mem_cur +=sizeof( uint64_t );
 	
 	return ret;
 }

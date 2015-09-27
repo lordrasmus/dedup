@@ -36,7 +36,7 @@ class Names{
 				
 				name_t = name_memory->add_string( name );
 				
-				printf("%d\n",cur_id);
+				//printf("%d\n",cur_id);
 				uint64_t id_tmp = cur_id++;
 				if ( id != 0 )
 					*id = id_tmp;

@@ -32,6 +32,9 @@ class FileMemory{
 		void     add_uint32_t( uint32_t value );
 		uint32_t get_uint32_t( void );
 		
+		void     add_uint64_t( uint64_t value );
+		uint64_t get_uint64_t( void );
+				
 		char*    add_string( const char* text );
 		char*    get_string( void );
 	
