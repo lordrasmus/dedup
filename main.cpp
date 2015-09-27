@@ -27,114 +27,15 @@
 
 
 #include "main.h"
-
+#include "names.h"
 #include "file_based_memory.h"
 
 
 
 
-struct cmp_char_p {
-    bool operator()(const char* a, const char* b) const {
-		int ret = strcmp(a,b);
-		
-		if ( ret < 0 ){
-			//printf(" a %s < b: %s\n",a,b);
-			return true;
-		}
-		
-		/*if ( ret == 0 )
-			printf(" a %s == b: %s\n",a,b);
-		
-		if ( ret > 0 )
-			printf(" a %s > b: %s\n",a,b);*/
-			
-        return false;
-    }
-};
-
-struct cmp_uchar_p {
-    bool operator()(const unsigned char* a, const unsigned char* b) const {
-		int ret = memcmp((const char*)a,(const char*)b, SHA512_DIGEST_LENGTH + MD5_DIGEST_LENGTH );
-		
-		if ( ret < 0 ){
-			//printf(" a %s < b: %s\n",a,b);
-			return true;
-		}
-		
-		/*if ( ret == 0 )
-			printf(" a %s == b: %s\n",a,b);
-		
-		if ( ret > 0 )
-			printf(" a %s > b: %s\n",a,b);*/
-			
-        return false;
-    }
-};
 
 
 
-
-class Names{
-	
-	private:
-
-		uint64_t cur_id = 0;
-		map< char* ,uint64_t, cmp_char_p > names_map;
-
-		FileMemory* name_memory;
-		
-	public:
-	
-		char* get_name( char* name ){
-			
-			char* name_t;
-			
-			map< char* ,uint64_t >::iterator names_map_it;
-			
-			names_map_it = names_map.find( name );
-			
-			if (names_map_it == names_map.end()) {
-				
-				name_t = name_memory->add_string( name );
-				
-				names_map.insert ( pair<char* ,uint32_t>( name_t ,cur_id++) );
-			}else{
-				name_t = names_map_it->first;
-			}
-			
-			return name_t;
-			
-		}
-		
-		
-		void load( void ){
-			printf("loading names  ...\n");
-	
-			name_memory= new FileMemory();
-			name_memory->open_mem( "/mnt/entwicklung_ext4/btrfs_dedeup_data/names" );
-			
-			while( name_memory->has_more_data() ){
-				
-				char *text = name_memory->get_string();
-				names_map.insert ( pair<char* ,uint64_t>( text ,cur_id++) );
-				
-			}
-			
-			printf("loading names finished\n");
-	
-		}
-		
-		void sync( void ){
-			
-			name_memory->sync( );
-		}
-		
-		void close( void ){
-			
-			name_memory->close_mem( );
-		}
-		
-};
 
 
 uint64_t files = 0;
@@ -220,7 +121,7 @@ struct btrfs_ioctl_same_args {
 void print_size( const char* text, size_t size){
 	
 	if ( size > ( 1024 * 1024 ) ){
-		printf("%s%d MB\n",text,size / (1024 * 1024 ));
+		printf("%s%" PRIu64 " MB\n",text,size / (1024 * 1024 ));
 		return;
 	}
 		
@@ -303,8 +204,8 @@ void merge_files( void ){
 			}
 			
 			for ( int i = 0 ; i < off ; i++ ){
-				printf("dedeup : %d %d %m\n",
-					same->info[i].bytes_deduped,
+				printf("dedeup : %" PRIu64 " %d %m\n",
+					(uint64_t)same->info[i].bytes_deduped,
 					same->info[i].status
 					);
 				
@@ -520,7 +421,6 @@ void listdir(const char *name, int level, dir_entry* root)
 		if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
 			continue;
             
-        char* name_t = names->get_name( entry->d_name );
 		
 		 
         if (entry->d_type == DT_DIR) {
@@ -528,11 +428,9 @@ void listdir(const char *name, int level, dir_entry* root)
             int len = snprintf(path, sizeof(path)-1, "%s/%s", name, entry->d_name);
             path[len] = 0;
             
-            dir_entry* new_dir = new dir_entry();
-            new_dir->name = name_t;
+            dir_entry* new_dir = new dir_entry( root , entry->d_name);
             
-            new_dir->parrent = root;
-            
+           
             root->sub_dirs.push_back( new_dir );
            
             
@@ -553,7 +451,9 @@ void listdir(const char *name, int level, dir_entry* root)
             
             //string s0 (path);
             //file_path.push_back ( s0 );
-            
+			
+			char* name_t = names->get_name( entry->d_name );
+
             
             file_entry* t = new file_entry();
             t->name = name_t;
@@ -573,8 +473,6 @@ void listdir(const char *name, int level, dir_entry* root)
 
 void scan_dir( dir_entry* dir, char* path ){
 	
-	dir->parrent = 0;
-	dir->name = path;
 	
 	printf("scan : %s\n",path);
 	
@@ -615,12 +513,13 @@ int main(void)
 	
 	//listdir("/mnt/entwicklung/build_tmp/", 0);
 	
-	dir_entry root_debian;
-	scan_dir( &root_debian, (char*)"/mnt/entwicklung/build_tmp/Debian8/crosstool-ng-build");
+	dir_entry* root_debian = new dir_entry( 0, "/var/" );
+	//scan_dir( &root_debian, (char*)"/mnt/entwicklung/build_tmp/Debian8/crosstool-ng-build");
+	scan_dir( root_debian, (char*)"/var/");
 	//scan_dir( &root_debian, (char*)"/mnt/entwicklung/build_tmp/Debian8");
 	
 	
-	dir_entry root_fedora;
+	//dir_entry root_fedora;
 	//scan_dir( &root_fedora, (char*)"/mnt/entwicklung/build_tmp/Fedora22/");
 	
 	
@@ -633,7 +532,7 @@ int main(void)
 	return 0;
     
     printf("\nHashing ...\n");
-	root_debian.update_hashes();
+	root_debian->update_hashes();
     //root_fedora.update_hashes();
     
     printf("\nHashing finished\n");
@@ -648,7 +547,7 @@ int main(void)
 		cout << ' ' << *it;
 	cout << '\n';*/
     
-    printf("Files : %d\n",files);
+    printf("Files : %" PRIu64 "\n",files);
     
     
     

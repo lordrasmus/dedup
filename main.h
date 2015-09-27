@@ -1,8 +1,12 @@
 
 #include <list>
-
-
 using namespace std;
+
+
+#include "utils.h"
+#include "names.h"
+
+extern Names *names;
 
 
 class dir_entry;
@@ -41,12 +45,27 @@ class file_entry{
 
 class dir_entry{
 	
-	public:
-		
-		
+	private:
+		char* name;
 		dir_entry * parrent;
 		
-		char* name;
+	public:
+		
+		dir_entry( dir_entry *parrent_p, const char* name_p ){
+			this->parrent = parrent;
+			
+			uint64_t id_t;
+			
+			char* name_t = names->get_name( name_p, &id_t );
+
+			this->name = name_t;
+			
+			printf("new dir : %s ( %" PRIu64 " )\n", name_t, id_t );
+		}
+		
+		
+		
+		
 		
 		list<dir_entry *> sub_dirs;   
 		list<file_entry *> files;   

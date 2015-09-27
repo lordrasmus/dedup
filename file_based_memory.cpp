@@ -21,7 +21,7 @@ void FileMemory::open_mem( const char* path ){
 
 	strncpy(this->path, path , MAX_PATH_LENGTH );
 
-	this->fd = open( path, O_RDWR | O_CREAT);
+	this->fd = open( path, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
 	if ( this->fd < 0 ) {
 		printf("Error opening file : %s\n   %m\n\n", this->path);
 		exit(1);
