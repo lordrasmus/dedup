@@ -85,6 +85,8 @@ class dir_entry{
 			if ( parrent_p != 0 ){
 				//exit ( 1 );
 				//sleep(1);
+				
+				parrent_p->sub_dirs.push_back( this );
 			}
 		}
 		

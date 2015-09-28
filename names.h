@@ -21,7 +21,7 @@ class Names{
 	public:
 	
 		char* get_name( char* name ){
-			get_name( name, 0 );
+			return get_name( name, 0 );
 		}
 		
 		char* get_name( const char* name , uint64_t* id){
@@ -36,7 +36,7 @@ class Names{
 				
 				name_t = name_memory->add_string( name );
 				
-				printf("%d %s\n",cur_id, name_t);
+				printf("%" PRIu64 " %s\n",cur_id, name_t);
 				uint64_t id_tmp = cur_id++;
 				if ( id != 0 )
 					*id = id_tmp;
@@ -66,7 +66,7 @@ class Names{
 				
 			}
 			
-			printf("loading names finished ( %d ) \n",cur_id);
+			printf("loading names finished ( %" PRIu64 " ) \n",cur_id);
 	
 		}
 		

@@ -33,7 +33,7 @@
 
 
 
-
+dir_entry* root_dir;
 
 uint64_t files = 0;
 uint64_t files_hashed = 0;
@@ -332,16 +332,24 @@ void file_entry::update_hash( void ){
 uint32_t dir_entry::add_path( char* buffer,uint32_t length ){
 	
 	uint32_t used = 0;
-	if ( this->parrent != 0 )
+	if ( this->parrent != 0 ){
 		used = this->parrent->add_path( buffer, length );
 	
-	length -= used;
-	buffer += used;
+		length -= used;
+		buffer += used;
+			
 		
-	buffer[0] = '/';
-	memcpy( buffer+1 , this->name, strlen( this->name ) );
+		memcpy( buffer , this->name, strlen( this->name ) );
+		buffer[strlen( this->name )] = '/';
+		buffer[strlen( this->name ) + 1] = '\0';
 	
-	return strlen( this->name ) + 1 + used ;
+		return strlen( this->name ) + 1 + used ;
+		
+	}else{
+		
+		memcpy( buffer , this->name, strlen( this->name ) );
+		return strlen( this->name ) ;
+	}
 }
 
 void dir_entry::update_hashes( void ){
@@ -381,20 +389,19 @@ void dir_entry::print_dirs( int level ){
 	list<file_entry *>::iterator it2;
 	
 	//printf("JO : %s\n",this->name);
+	printf( "%*s \033[01;32m%s\033[00m\n",  level *2 , " ", this->name );
 	
 	dir_entry *t;
 	file_entry *t2;
 	
 	for (it=sub_dirs.begin(); it!=sub_dirs.end(); ++it){
 		t = *it;
-		printf( "%*s \033[01;32m%s\033[00m\n",  level *2 , " ", t->name );
-		
 		t->print_dirs( level + 1 );
 	}
 	
 	for (it2=files.begin(); it2!=files.end(); ++it2){
 		t2 = *it2;
-		printf( "%*s %s\n",  level *2 , " ", t2->name );
+		printf( "%*s %s\n",  ( level +1 ) *2 , " ", t2->name );
 		
 		//t2->print_path();
 		
@@ -419,8 +426,7 @@ void listdir(const char *name, int level, dir_entry* root)
 		
 		if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
 			continue;
-            
-		
+        
 		 
         if (entry->d_type == DT_DIR) {
             char path[1024];
@@ -429,27 +435,12 @@ void listdir(const char *name, int level, dir_entry* root)
             
             dir_entry* new_dir = new dir_entry( root , entry->d_name);
             
-           
-            root->sub_dirs.push_back( new_dir );
-           
-            
-            /*if ( level < 1 ){
-				printf("Files : %d\n\n",files);
-			}
-				
-            if ( level < 1 ){
-				printf("scan : %s\n",path);
-				
-			}*/
+                       
             //printf("%*s[%s]\n", level*2, "", entry->d_name);
             listdir(path, level + 1, new_dir );
         }
-        else{
-			char path[1024];
-            //sprintf(path,"%s/%s\n", name, entry->d_name);
-            
-            //string s0 (path);
-            //file_path.push_back ( s0 );
+        
+        if (entry->d_type == DT_REG) {
 			
 			char* name_t = names->get_name( entry->d_name );
 
@@ -463,19 +454,59 @@ void listdir(const char *name, int level, dir_entry* root)
             
             files++;
         }
-    } while (entry = readdir(dir));
-    closedir(dir);
+		
     
+    } while ( ( entry = readdir(dir) ) );
+    
+    closedir(dir);
     
 }
 
+void tok_dir( char* path ){
+	
+	
+	char *ptr = strtok(path, "/" );
+	
+	dir_entry* new_dir = new dir_entry( root_dir , ptr);    
 
-void scan_dir( dir_entry* dir, char* path ){
+	while( 1 ) {
+		
+		ptr = strtok(NULL, "/");
+		if ( ptr == NULL )
+			break;
+		
+		new_dir = new dir_entry( new_dir , ptr);		
+	}	
+	
+	char start_path[4096];
+	
+	new_dir->add_path( start_path, 4096 );
+	
+	printf("scan : %s\n",start_path);
+	listdir(start_path, 0 , new_dir);
+}
+
+void scan_dir(  char* path ){
 	
 	
-	printf("scan : %s\n",path);
+	if ( path[0] != '/' ){
+		
+		char* path2 = realpath( path , NULL );
+		//printf("scan : %s\n",path2);
+		
+		tok_dir( path2 );
+		
+		free(path2);
+		
+	}else{	
+		
+		//printf("scan : %s\n",path);
+		
+		tok_dir( path );
+		
+	}
 	
-	listdir(path, 0, dir);
+	printf("scan beendet\n");
 }
 
 int main(int argc, char* argv[])
@@ -509,47 +540,28 @@ int main(int argc, char* argv[])
 	names->load();
 	
 	
+	root_dir = new dir_entry( 0, "/" );
 	
-	dir_entry* root_debian = new dir_entry( 0, argv[1] );
-	scan_dir( root_debian, (char*)argv[1]);
+	
+	//dir_entry* root_debian = new dir_entry( 0, argv[1] );
+	scan_dir( argv[1] );
 		
 	names->sync();
 	
-	//listdir("/mnt/entwicklung/build_tmp/", 0);
-	
-	//dir_entry* root_debian = new dir_entry( 0, "/mnt/btrfs//" );
-	//scan_dir( &root_debian, (char*)"/mnt/entwicklung/build_tmp/Debian8/crosstool-ng-build");
-	//scan_dir( root_debian, (char*)"/mnt/btrfs//");
-	//scan_dir( &root_debian, (char*)"/mnt/entwicklung/build_tmp/Debian8");
-	
-	
-	//dir_entry root_fedora;
-	//scan_dir( &root_fedora, (char*)"/mnt/entwicklung/build_tmp/Fedora22/");
-	
-	
-	//dir_entry root_fedora;
-	//root_fedora.parrent = 0;
-	//root_fedora.name = (char*) "mnt/entwicklung/build_tmp/Fedora22";
-    //listdir("/mnt/entwicklung/build_tmp/Fedora22/", 0, &root_fedora);
-    //listdir("/mnt/entwicklung/build_tmp/Fedora17/", 0);
+	//root_dir->print_dirs(0);
+
+    printf("\n\n");
     
-	return 0;
+	//return 0;
     
     printf("\nHashing ...\n");
-	root_debian->update_hashes();
+	root_dir->update_hashes();
     //root_fedora.update_hashes();
     
     printf("\nHashing finished\n");
     
     //merge_files();
     
-    //root_debian.print_dirs(0);
-    //root_fedora.print_dirs(0);
-    
-    /*cout << "mylist contains:";
-	for (it=file_path.begin(); it!=file_path.end(); ++it)
-		cout << ' ' << *it;
-	cout << '\n';*/
     
     printf("Files : %" PRIu64 "\n",files);
     
