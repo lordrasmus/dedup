@@ -388,6 +388,7 @@ void dir_entry::update_hashes( void ){
 		t->update_hashes( );
 	}
 
+	//#pragma omp parallel for
 	for (it2=files.begin(); it2!=files.end(); ++it2){
 		t2 = *it2;
 		t2->update_hash();
@@ -545,8 +546,8 @@ int main(int argc, char* argv[])
 	root_dir = new dir_entry( 0, "/" );
 
 
-	//scan_dir( argv[1] );
-	scan_dir( "test_data" );
+	scan_dir( argv[1] );
+	//scan_dir( "test_data" );
 
 	names->sync();
 
