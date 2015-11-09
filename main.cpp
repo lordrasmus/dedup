@@ -121,7 +121,7 @@ struct btrfs_ioctl_same_args {
 void print_size( const char* text, size_t size, const char* end){
 
 	if ( size > ( 1024 * 1024 * 1024 ) ){
-		double s = size / (1024 * 1024 * 1024 );
+		double s = size / (double)(1024 * 1024 * 1024 );
 		printf("%s%0.2f GB%s",text,s,end);
 		return;
 	}
