@@ -21,13 +21,10 @@
 #include <string>
 #include <map>
 
-#include <openssl/md5.h>
-#include <openssl/sha.h>
 
 #include "MurmurHash3.h"
 
-//#define SHA512_DIGEST_LENGTH DIGEST_LEN_MAX
-//#define MD5_DIGEST_LENGTH 0
+#define HASH_DIGEST_LENGTH ( 16 + 8 )
 
 
 #include "main.h"
@@ -121,12 +118,25 @@ struct btrfs_ioctl_same_args {
 
 #endif
 
-void print_size( const char* text, size_t size){
+void print_size( const char* text, size_t size, const char* end){
 
-	if ( size > ( 1024 * 1024 ) ){
-		printf("%s%" PRIu64 " MB\n",text,size / (1024 * 1024 ));
+	if ( size > ( 1024 * 1024 * 1024 ) ){
+		double s = size / (1024 * 1024 * 1024 );
+		printf("%s%0.2f GB%s",text,s,end);
 		return;
 	}
+	
+	if ( size > ( 1024 * 1024 ) ){
+		printf("%s%" PRIu64 " MB%s",text,size / (1024 * 1024 ),end);
+		return;
+	}
+	
+	if ( size > ( 1024 ) ){
+		printf("%s%" PRIu64 " kB%s",text,size / (1024 ),end);
+		return;
+	}
+	
+	printf("%s%" PRIu64 " B%s",text,size ,end);
 
 }
 
@@ -139,6 +149,9 @@ void merge_files( void ){
 	uint32_t matches = 0;
 
 	size_t  reduction = 0;
+	size_t  cur_reduction = 0;
+	
+	printf("\n");
 
 	map< unsigned char* ,file_hash* >::iterator hash_map_it;
 
@@ -150,7 +163,7 @@ void merge_files( void ){
 			matches++;
 
 			//printf("\nchecksum matches %d \n\n",t->count);
-			printf("\nchecksum matches %d \n",t->count);
+			//printf("\rchecksum matches %d \n",t->count);
 
 			/*
 			 * 	TODO : Anzahl der fds noch testen
@@ -212,17 +225,27 @@ void merge_files( void ){
 
 				int ret = ioctl(src_fd, BTRFS_IOC_FILE_EXTENT_SAME, same);
 				if (ret < 0) {
-					fprintf(stderr, "btrfs_same returned error: (%d) %m\n", ret);
-					//return -ret;
+					fprintf(stderr, "   btrfs_same returned error: (%d) %m\n", ret);
+					break;
 				}
 
 				cur_logical_offset += same->info[0].bytes_deduped;
 				saved_total += off * same->info[0].bytes_deduped;
+				
+				if ( cur_logical_offset == 0 ){
+					sleep(1);
+					printf("   Error merging files\n");
+					break;
+				}
+				
+				//printf("%d %d\n",cur_logical_offset, file_length);
 
 				for ( int i = 0 ; i < off ; i++ ){
 					same->info[i].logical_offset += same->info[0].bytes_deduped;
 				}
 			}
+			
+			cur_reduction += saved_total;
 
 			for (it2=t->files.begin(); it2!=t->files.end(); ++it2){
 				fe = *it2;
@@ -233,20 +256,24 @@ void merge_files( void ){
 
 			free( same );
 
-			printf("dedeup : saved %" PRIu64 " B\n",saved_total);
+			printf("\r\x1b[Kchecksum matches %d ",t->count);
+			print_size("\x1b[24G saved ", saved_total , "");
+			print_size("\x1b[40G total ", cur_reduction, "");
+			fflush( stdout );
 
 
 		}
 
 	}
 
-	printf("\n");
+	printf("\n\n");
 
 	printf("Match Summary\n");
 
 	printf("  Matches   : %d\n",matches);
 	printf("  Total     : %d\n",total_matches);
-	print_size("  Reduction : ",reduction);
+	print_size("  Reduction : ",reduction,"\n");
+	fflush( stdout );
 
 	printf("\n");
 }
@@ -296,17 +323,11 @@ void file_entry::update_hash( void ){
 
 	full_path[used] = '/';
 	strcpy( &full_path[used+1] , this->name );
-
-	//printf("%s\n", full_path );
-
 	files_hashed++;
-
-	//printf("%d / %d\n",files, files_hashed );
 
 	double tmp = files_hashed;
 	tmp /= files;
 	tmp *= 100;
-
 
 	if (( tmp - files_hashed_proz ) > 0.01 ) {
 		printf("\r%.2f %%",tmp );
@@ -316,7 +337,7 @@ void file_entry::update_hash( void ){
 
 	int fd = open(full_path, O_RDONLY );
 	if ( fd < 0 ) {
-		//printf("Error opening file : %s\n   %m\n\n", full_path);
+		printf("Error opening file : %s\n   %m\n\n", full_path);
 		return;
 	}
 
@@ -330,20 +351,16 @@ void file_entry::update_hash( void ){
 
 		unsigned char* mem = (unsigned char*)mmap(NULL, st.st_size , PROT_READ , MAP_PRIVATE, fd, 0);
 
-		unsigned char *md = (unsigned char*)malloc( SHA512_DIGEST_LENGTH + MD5_DIGEST_LENGTH);
-		memset( md, 0 , SHA512_DIGEST_LENGTH + MD5_DIGEST_LENGTH );
-
-		/*struct running_checksum *sum = start_running_checksum();
-		add_to_running_checksum( sum, st.st_size, mem );
-		finish_running_checksum( sum, md );*/
+		unsigned char *md = (unsigned char*)malloc( HASH_DIGEST_LENGTH );
+		memset( md, 0 , HASH_DIGEST_LENGTH );
 
 		MurmurHash3_x64_128( mem, st.st_size ,0 , md );
-
-		//SHA1( mem ,st.st_size, md );
-		//SHA512( mem ,st.st_size, md );
-		//MD5( mem ,st.st_size, md + SHA512_DIGEST_LENGTH );
+		
+		// länge mit in den hash schreiben um kollisionen zu vermeiden
+		*((uint64_t*)( &md[16] )) = st.st_size;
 
 		add_hash( md, this );
+		
 
 		munmap( mem , st.st_size );
 	}
@@ -563,7 +580,7 @@ int main(int argc, char* argv[])
 
     printf("\nHashing finished\n");
 
-    //merge_files();
+    merge_files();
 
 
     printf("Files : %" PRIu64 "\n",files);
