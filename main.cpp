@@ -462,6 +462,8 @@ void listdir(const char *name, int level, dir_entry* root)
         return;
     if (!(entry = readdir(dir)))
         return;
+        
+    uint64_t files_k = 0;
 
     do {
 
@@ -494,6 +496,12 @@ void listdir(const char *name, int level, dir_entry* root)
             root->files.push_back( t );
 
             files++;
+            
+            if ( files_k != ( files / 1024 ) ){
+				files_k = files / 1024;
+				printf("\rFiles found : %" PRIu64 " k",files_k);
+				fflush( stdout );
+			}
         }
 
 
