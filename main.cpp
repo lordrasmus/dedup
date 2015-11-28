@@ -167,7 +167,7 @@ void merge_files( void ){
 	for (hash_map_it=hashes_map.begin(); hash_map_it!=hashes_map.end(); ++hash_map_it){
 		file_hash* t = hash_map_it->second;
 
-		print_size( buf, reduction);
+		print_size( buf, cur_reduction);
 		main_win->update_merge_progress( matches, total_matches, buf );
 		
 		if ( t->count > 1 ){
@@ -245,8 +245,7 @@ void merge_files( void ){
 				saved_total += off * same->info[0].bytes_deduped;
 				
 				if ( cur_logical_offset == 0 ){
-					sleep(1);
-					//printf("   Error merging files\n");
+					main_win->add_log("   Error merging files");
 					break;
 				}
 				
