@@ -1,7 +1,6 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <dirent.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <sys/mman.h>
 
@@ -21,16 +20,22 @@
 #include <string>
 #include <map>
 
+#include <form.h>
+#include <stdlib.h>
+#include <ctype.h>
+#include <curses.h>
+#include <libconfig.h++>
+using namespace libconfig;
 
 #include "MurmurHash3.h"
 
 #define HASH_DIGEST_LENGTH ( 16 + 8 )
 
-
 #include "main.h"
 #include "names.h"
 #include "file_based_memory.h"
 
+#include "ui.h"
 
 
 
@@ -45,12 +50,15 @@ Names *names;
 map< unsigned char* ,file_hash*, cmp_uchar_p > hashes_map;
 
 
+UI *main_win;
+
+
 //FileMemory* dir_memory;
 
 void file_entry::print_path( void ){
 
 	this->parrent->print_path();
-	printf("/%s\n",this->name);
+	//printf("/%s\n",this->name);
 
 }
 
@@ -118,25 +126,26 @@ struct btrfs_ioctl_same_args {
 
 #endif
 
-void print_size( const char* text, size_t size, const char* end){
+void print_size( char* buffer, size_t size){
 
 	if ( size > ( 1024 * 1024 * 1024 ) ){
 		double s = size / (double)(1024 * 1024 * 1024 );
-		printf("%s%0.2f GB%s",text,s,end);
+		sprintf(buffer,"%0.3f GB",s);
 		return;
 	}
 	
 	if ( size > ( 1024 * 1024 ) ){
-		printf("%s%" PRIu64 " MB%s",text,size / (1024 * 1024 ),end);
+		double s = size / (double)(1024 * 1024 );
+		sprintf(buffer,"%0.2f MB",s);
 		return;
 	}
 	
 	if ( size > ( 1024 ) ){
-		printf("%s%" PRIu64 " kB%s",text,size / (1024 ),end);
+		sprintf(buffer,"%" PRIu64 " kB",size / (1024 ));
 		return;
 	}
 	
-	printf("%s%" PRIu64 " B%s",text,size ,end);
+	sprintf(buffer,"%" PRIu64 " B",size );
 
 }
 
@@ -151,13 +160,16 @@ void merge_files( void ){
 	size_t  reduction = 0;
 	size_t  cur_reduction = 0;
 	
-	printf("\n");
-
+	char buf[200];
+	
 	map< unsigned char* ,file_hash* >::iterator hash_map_it;
 
 	for (hash_map_it=hashes_map.begin(); hash_map_it!=hashes_map.end(); ++hash_map_it){
 		file_hash* t = hash_map_it->second;
 
+		print_size( buf, reduction);
+		main_win->update_merge_progress( matches, total_matches, buf );
+		
 		if ( t->count > 1 ){
 
 			matches++;
@@ -181,7 +193,7 @@ void merge_files( void ){
 			uint64_t file_length = 0;
 
 			struct btrfs_ioctl_same_args *same = (struct btrfs_ioctl_same_args*)calloc(1, sizeof(struct btrfs_ioctl_same_args) + sizeof(struct btrfs_ioctl_same_extent_info) * t->count - 1);
-			struct btrfs_ioctl_same_extent_info *info;
+			//struct btrfs_ioctl_same_extent_info *info;
 
 			same->dest_count = t->count - 1;
 
@@ -225,7 +237,7 @@ void merge_files( void ){
 
 				int ret = ioctl(src_fd, BTRFS_IOC_FILE_EXTENT_SAME, same);
 				if (ret < 0) {
-					fprintf(stderr, "   btrfs_same returned error: (%d) %m\n", ret);
+					main_win->add_log( "   btrfs_same returned error: (%d) %m", ret);
 					break;
 				}
 
@@ -234,7 +246,7 @@ void merge_files( void ){
 				
 				if ( cur_logical_offset == 0 ){
 					sleep(1);
-					printf("   Error merging files\n");
+					//printf("   Error merging files\n");
 					break;
 				}
 				
@@ -256,26 +268,27 @@ void merge_files( void ){
 
 			free( same );
 
-			printf("\r\x1b[Kchecksum matches %d ",t->count);
+			/*printf("\r\x1b[Kchecksum matches %d ",t->count);
 			print_size("\x1b[24G saved ", saved_total , "");
 			print_size("\x1b[40G total ", cur_reduction, "");
 			fflush( stdout );
+			* */
 
 
 		}
 
 	}
+	
+	
+	print_size( buf, reduction);
 
-	printf("\n\n");
-
-	printf("Match Summary\n");
-
-	printf("  Matches   : %d\n",matches);
-	printf("  Total     : %d\n",total_matches);
-	print_size("  Reduction : ",reduction,"\n");
-	fflush( stdout );
-
-	printf("\n");
+	mvwprintw(main_win->mainwin, 7 , 3, "Match Summary :" );
+	mvwprintw(main_win->mainwin, 8 , 3, "  Matches   : %d",matches);
+	mvwprintw(main_win->mainwin, 9 , 3, "  Total     : %d",total_matches);
+	mvwprintw(main_win->mainwin, 10 , 3, "  Reduction : %s",buf);//,reduction,"\n");
+	
+	
+	wrefresh( main_win->mainwin );
 }
 
 int file_entry::open_file( void ){
@@ -291,7 +304,7 @@ int file_entry::open_file( void ){
 	ret = open( full_path, O_RDWR );
 
 	if (ret < 0) {
-		printf("Error open : %m\n");
+		//printf("Error open : %m\n");
 		return 0;
 	}
 
@@ -325,19 +338,13 @@ void file_entry::update_hash( void ){
 	strcpy( &full_path[used+1] , this->name );
 	files_hashed++;
 
-	double tmp = files_hashed;
-	tmp /= files;
-	tmp *= 100;
+	main_win->update_hash_progress( files, files_hashed );
 
-	if (( tmp - files_hashed_proz ) > 0.01 ) {
-		printf("\r%.2f %%",tmp );
-		fflush( stdout);
-		files_hashed_proz = tmp;
-	}
+	
 
 	int fd = open(full_path, O_RDONLY );
 	if ( fd < 0 ) {
-		printf("Error opening file : %s\n   %m\n\n", full_path);
+		//printf("Error opening file : %s\n   %m\n\n", full_path);
 		return;
 	}
 
@@ -419,7 +426,7 @@ void dir_entry::print_path( void ){
 	if ( this->parrent != 0 )
 		this->parrent->print_path();
 
-	printf("/%s",this->name);
+	//printf("/%s",this->name);
 
 }
 
@@ -430,10 +437,10 @@ void dir_entry::print_dirs( int level ){
 	list<file_entry *>::iterator it2;
 
 	//printf("JO : %s\n",this->name);
-	printf( "%*s \033[01;32m%s\033[00m\n",  level *2 , " ", this->name );
+	//printf( "%*s \033[01;32m%s\033[00m\n",  level *2 , " ", this->name );
 
 	dir_entry *t;
-	file_entry *t2;
+	//file_entry *t2;
 
 	for (it=sub_dirs.begin(); it!=sub_dirs.end(); ++it){
 		t = *it;
@@ -441,8 +448,8 @@ void dir_entry::print_dirs( int level ){
 	}
 
 	for (it2=files.begin(); it2!=files.end(); ++it2){
-		t2 = *it2;
-		printf( "%*s %s\n",  ( level +1 ) *2 , " ", t2->name );
+		//t2 = *it2;
+		//printf( "%*s %s\n",  ( level +1 ) *2 , " ", t2->name );
 
 		//t2->print_path();
 
@@ -499,8 +506,8 @@ void listdir(const char *name, int level, dir_entry* root)
             
             if ( files_k != ( files / 1024 ) ){
 				files_k = files / 1024;
-				printf("\rFiles found : %" PRIu64 " k",files_k);
-				fflush( stdout );
+				//printf("\rFiles found : %" PRIu64 " k",files_k);
+				//fflush( stdout );
 			}
         }
 
@@ -511,10 +518,10 @@ void listdir(const char *name, int level, dir_entry* root)
 
 }
 
-void tok_dir( char* path ){
+void tok_dir( const char* path ){
 
 
-	char *ptr = strtok(path, "/" );
+	char *ptr = strtok((char*)path, "/" );
 
 	dir_entry* new_dir = new dir_entry( root_dir , ptr);
 
@@ -531,11 +538,11 @@ void tok_dir( char* path ){
 
 	new_dir->add_path( start_path, 4096 );
 
-	printf("scan : %s\n",start_path);
+	//printf("scan : %s\n",start_path);
 	listdir(start_path, 0 , new_dir);
 }
 
-void scan_dir(  char* path ){
+void scan_dir( const char* path ){
 
 
 	if ( path[0] != '/' ){
@@ -555,49 +562,176 @@ void scan_dir(  char* path ){
 
 	}
 
-	printf("scan beendet\n");
+	//printf("scan beendet\n");
 }
+
+
 
 int main(int argc, char* argv[])
 {
+	
+	main_win = new UI();
+    
+	Config cfg;
+	
+	char* pPath = getenv ("HOME");
+	
+	char cfg_file[1000];
+	snprintf(cfg_file,1000,"%s/.config/dedub.cfg",pPath);
+	
+	if ( 0 != access( cfg_file, R_OK) ){
+		
+		Setting &root = cfg.getRoot();
 
+		// Add some settings to the configuration.
+		Setting &data = root.add("Data", Setting::TypeGroup);
+		data.add("path", Setting::TypeString) = "/mnt/work/dedup_data";
+		
+		root.add("ScanDirs", Setting::TypeList);
+		
+		Setting &scan_dirs = root["ScanDirs"];
+		  
+		Setting &scan = scan_dirs.add(Setting::TypeGroup);
+		scan.add("path", Setting::TypeString) = "/mnt/btrfs/Fedora22/";
+		
+	/*	Setting &scan3 = scan_dirs.add(Setting::TypeGroup);
+		scan3.add("path", Setting::TypeString) = "/mnt/btrfs/Fedora22_r/";*/
+		
+		Setting &scan2 = scan_dirs.add(Setting::TypeGroup);
+		scan2.add("path", Setting::TypeString) = "/mnt/btrfs/Fedora23/";
+  
+		try{
+			cfg.writeFile(cfg_file);
+			main_win->add_log( "New configuration successfully written to: %s", cfg_file);
+		}
+		catch(const FileIOException &fioex){
+			main_win->add_log( "I/O error while writing file: %s",cfg_file);
+			main_win->add_log( "   %m ");
+			return(EXIT_FAILURE);
+		}
+	}
+	
+	try{
+		cfg.readFile(cfg_file);
+	}
+	catch(const FileIOException &fioex){
+		std::cerr << "I/O error while reading file." << std::endl;
+		return(EXIT_FAILURE);
+	}
+	catch(const ParseException &pex){
+		std::cerr << "Parse error at " << pex.getFile() << ":" << pex.getLine() << " - " << pex.getError() << std::endl;
+		return(EXIT_FAILURE);
+	}  
+	
+	Setting &root = cfg.getRoot();
+	Setting &data = root["Data"];
+	
+	string data_path;
+	data.lookupValue("path", data_path);
+	
+	Setting &scan_dirs = root["ScanDirs"];
+	
+	//main_win.show_data_path_dialog( data_path );
+	//data_path = main_win.data_path;
+	
+	/*strcpy(main_win.data_path,"test");
+	main_win.show_progress_win();
+	main_win.add_progress_win_line("Test1");
+	sleep(2);
+	main_win.hide_progress_win();
+	sleep(2);
+	main_win.show_progress_win();
+	main_win.add_progress_win_line("Test2");
+	main_win.add_progress_win_line("Test3");
+	sleep(2);
+	main_win.hide_progress_win();
+	sleep(2);
+	main_win.close();
+	exit(1);*/
+    
+   
+	main_win->show_progress_win();
 
-	names = new Names();
+	names = new Names( main_win, data_path );
 
-	printf("\nBtrfs Dedup Version : TRUNK\n\n");
+	//printf("\nBtrfs Dedup Version : TRUNK\n\n");
 
 	names->load();
 
 	root_dir = new dir_entry( 0, "/" );
+	
+	
+	int count = scan_dirs.getLength();
+	
+	for(int i = 0; i < count; ++i)
+    {
+		string path;
+		const Setting &scan = scan_dirs[i];
+		scan.lookupValue("path", path);
+		main_win->add_log( "Scan : %s",path.c_str() );
+		
+		scan_dir( path.c_str() );
+      
+     }
+     
+    
 
-
-	scan_dir( argv[1] );
+	//scan_dir( argv[1] );
 	//scan_dir( "test_data" );
 
 	names->sync();
+	//getch();
+	main_win->hide_progress_win();
+
+
 
 	//root_dir->print_dirs(0);
 
-    printf("\n\n");
-
 	//return 0;
+	
+	int ch;
+    while((ch = wgetch(main_win->mainwin)) != KEY_F(2)){
+		if ( ch == 0xa )	break;
+		if ( ch == 'q' )	break;
+			
+		switch(ch)
+		{	case KEY_F(3):
+				main_win->set_status("Hashing ...");
+				root_dir->update_hashes();
+				main_win->set_status("Hashing finished");
+				break;
+				
+			case KEY_F(4):
+				main_win->set_status("Merging ...");
+				merge_files();
+				main_win->set_status("Merging finished");
+				break;
+			
+			case KEY_F(5):
+				main_win->set_status("Hashing ...");
+				root_dir->update_hashes();
+				main_win->set_status("Hashing finished");
+				
+				main_win->set_status("Merging ...");
+				merge_files();
+				main_win->set_status("Merging finished");
+				break;
+				
+			default:
+				break;
+		}
+	}
 
-    printf("\nHashing ...\n");
-	root_dir->update_hashes();
-    //root_fedora.update_hashes();
-
-    printf("\nHashing finished\n");
-
-    merge_files();
+    
+	main_win->close();
+    
+    exit(0);
 
 
-    printf("Files : %" PRIu64 "\n",files);
+    //main_win->add_progress_win_line("Files : %" PRIu64 "",files);
 
 
 
-
-
-    printf("\n");
 
      // showing contents:
 	/*cout << "mymap contains:\n";
@@ -614,3 +748,68 @@ int main(int argc, char* argv[])
 
     return 0;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    /*  Print message  */
+
+    
+#if 0
+   
+
+   
+    init_pair(1,  COLOR_RED,     COLOR_BLACK);
+	init_pair(2,  COLOR_GREEN,   COLOR_BLACK);
+	init_pair(3,  COLOR_YELLOW,  COLOR_BLACK);
+	init_pair(4,  COLOR_BLUE,    COLOR_BLACK);
+	init_pair(5,  COLOR_MAGENTA, COLOR_BLACK);
+	init_pair(6,  COLOR_CYAN,    COLOR_BLACK);
+	init_pair(7,  COLOR_BLUE,    COLOR_WHITE);
+	init_pair(8,  COLOR_WHITE,   COLOR_RED);
+	init_pair(9,  COLOR_BLACK,   COLOR_GREEN);
+	init_pair(10, COLOR_BLUE,    COLOR_YELLOW);
+	init_pair(11, COLOR_WHITE,   COLOR_BLUE);
+	init_pair(12, COLOR_WHITE,   COLOR_MAGENTA);
+	init_pair(13, COLOR_BLACK,   COLOR_CYAN);
+
+
+
+	mvaddstr(6, 32, " Hello, world! ");
+
+	/*  Use them to print of bunch of "Hello, world!"s  */
+
+	int n = 0;
+	while ( n <= 13 ) {
+	    color_set(n, NULL);
+	    mvaddstr(6 + n, 32, " Hello, world! ");
+	    n++;
+	}
+ 
+    refresh();
+    
+    
+    mvwaddstr(childwin,2 , 2, "Press a key ('q' to quit)...");
+   
+    refresh();
+
+
+    
+
+
+#endif
+

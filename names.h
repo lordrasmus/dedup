@@ -7,6 +7,7 @@
 #include "utils.h"
 #include "file_based_memory.h"
 
+#include "ui.h"
 
 
 class Names{
@@ -18,7 +19,16 @@ class Names{
 
 		FileMemory* name_memory;
 		
+		UI *main;
+		string data_path;
+		
 	public:
+	
+		
+		Names( UI *main_p, string data_path_p ){
+			this->main = main_p;
+			this->data_path = data_path_p;
+		}
 	
 		char* get_name( char* name ){
 			return get_name( name, 0 );
@@ -54,10 +64,17 @@ class Names{
 		
 		
 		void load( void ){
-			printf("loading names  ...\n");
+			main->add_progress_win_line("loading names  ...");
 	
-			name_memory= new FileMemory();
-			name_memory->open_mem( "/mnt/entwicklung_ext4/btrfs_dedeup_data/names" );
+			name_memory= new FileMemory( main );
+			char buffer[1000];
+			sprintf(buffer,"%s/names",data_path.c_str());
+			if ( -1 == name_memory->open_mem( buffer ) ){
+				main->add_progress_win_line("loading names  Error");
+				return;
+			}
+			
+			main->add_progress_win_line("loading names  OK");
 			
 			while( name_memory->has_more_data() ){
 				
@@ -66,7 +83,9 @@ class Names{
 				
 			}
 			
-			printf("loading names finished ( %" PRIu64 " ) \n",cur_id);
+			char tmp[100];
+			sprintf(tmp,"loading names finished ( %" PRIu64 " ) ",cur_id);
+			main->add_progress_win_line(tmp);
 	
 		}
 		

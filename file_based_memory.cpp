@@ -15,7 +15,7 @@
 #include "file_based_memory.h"
 
 
-void FileMemory::open_mem( const char* path ){
+int FileMemory::open_mem( const char* path ){
 
 	this->size = 4294967296L; // 4 GB
 
@@ -23,8 +23,9 @@ void FileMemory::open_mem( const char* path ){
 
 	this->fd = open( path, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
 	if ( this->fd < 0 ) {
-		printf("Error opening file : %s\n   %m\n\n", this->path);
-		exit(1);
+		main->add_log("Error opening file : %s", this->path);
+		main->add_log("  %m");
+		return -1;
 	}
 
 	// create names as sparse file
@@ -38,10 +39,11 @@ void FileMemory::open_mem( const char* path ){
 	this->mem_cur = this->mem_start;
 	
 	if (this->mem_start == MAP_FAILED){
-		 printf("Error: mmaping  file %s\n",this->path);
-		 exit(1);
+		 main->add_log("Error: mmaping  file %s\n",this->path);
+		 return -1;
 	}
 	
+	return 0;
 }
 
 void FileMemory::sync( void ){
@@ -89,8 +91,8 @@ uint16_t FileMemory::get_uint16_t( void ){
 
 	uint16_t* size = (uint16_t*)this->mem_cur;
 	if ( *size != 2 ){
-		printf("next item size != 2 ( %d ) \n", *size);
-		exit(1);
+		main->add_log("next item size != 2 ( %d ) \n", *size);
+		throw 20;
 	}
 	this->mem_cur +=2;
 	
@@ -122,8 +124,8 @@ uint32_t FileMemory::get_uint32_t( void ){
 
 	uint16_t* size = (uint16_t*)this->mem_cur;
 	if ( *size != sizeof( uint32_t ) ){
-		printf("next item size != 4 ( %d ) \n", *size);
-		exit(1);
+		main->add_log("next item size != 4 ( %d ) \n", *size);
+		 throw 20;
 	}
 	this->mem_cur +=2;
 	
@@ -155,8 +157,8 @@ uint64_t FileMemory::get_uint64_t( void ){
 
 	uint16_t* size = (uint16_t*)this->mem_cur;
 	if ( *size != sizeof( uint64_t ) ){
-		printf("next item size != 8 ( %d ) \n", *size);
-		exit(1);
+		main->add_log("next item size != 8 ( %d ) \n", *size);
+		throw 20;
 	}
 	this->mem_cur +=2;
 	

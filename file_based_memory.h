@@ -5,10 +5,17 @@
 
 #define MAX_PATH_LENGTH 1024
 
+#include "ui.h"
+
 class FileMemory{
 	
+		UI *main;
 	
 	public:
+	
+		FileMemory( UI* main_p ){
+			this->main = main_p;
+		}
 		
 		int      fd;
 		uint8_t*    mem_cur;
@@ -19,7 +26,7 @@ class FileMemory{
 		char path[MAX_PATH_LENGTH];
 		
 		
-		void     open_mem( const char* path );
+		int      open_mem( const char* path );
 		void     close_mem( void );
 		
 		void     sync( void );

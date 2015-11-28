@@ -28,6 +28,8 @@ class file_entry{
 	
 	public:
 	
+		
+	
 		dir_entry * parrent;
 		
 		char* name;
@@ -66,9 +68,10 @@ class dir_entry{
 			this->parrent = parrent_p;
 			
 			uint64_t id_t;
-			uint64_t parrent_id = 0;
+			/*uint64_t parrent_id = 0;
 			if ( parrent_p != 0 )
 				parrent_id = parrent_p->id;
+			*/
 			
 			char* name_t = names->get_name( name_p, &id_t );
 
